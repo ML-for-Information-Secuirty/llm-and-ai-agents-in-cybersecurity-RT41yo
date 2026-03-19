@@ -1,0 +1,67 @@
+name: Auto-Grader
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check for windows_correlation_rules.zip
+        run: |
+          if [ ! -f windows_correlation_rules.zip ]; then
+            echo "File 'windows_correlation_rules.zip' not found in the root of the repository."
+            echo "Please upload your solution as 'windows_correlation_rules.zip'."
+            exit 1
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Run grader container
+        run: |
+          docker run --rm \
+            -v $(pwd):/work \
+            alexxaadevv/hw6_grader:1.0.0 \
+            /work/windows_correlation_rules.zip
+
+      - name: Show grading result (only summary)
+        run: |
+          echo "Grading completed!"
+          echo "Results:"
+          cat grade.json | jq '.'
+
+      - name: Commit grade.json if generated
+        run: |
+          if [ -f "grade.json" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+            git add grade.json
+      
+            if ! git diff-index --quiet HEAD --; then
+              git commit -m "Auto-grade results"
+      
+              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+      
+              git push origin HEAD:main
+              echo "grade.json committed and pushed to ${{ github.repository }}"
+            else
+              echo "No changes in grade.json — nothing to commit."
+            fi
+          else
+            echo "grade.json not found — skipping commit."
+          fi
