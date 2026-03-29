@@ -13,33 +13,52 @@ def get_i18n_dir(correlation_dir: Path) -> Path:
     return correlation_dir / "i18n"
 
 
-def _validate_i18n_yaml(data: dict[str, Any], rule_name: str) -> dict[str, Any]:
+def _fallback_event_description(language: str, rule_name: str, variant: int) -> str:
+    if language == "en":
+        if variant == 1:
+            return (
+                "Process {subject.process.name} accessed browser credential files "
+                "under account {subject.account.id} on host {event_src.host}"
+            )
+        return (
+            "Suspicious access to browser password store files was detected on host {event_src.host}"
+        )
+
+    if variant == 1:
+        return (
+            "Процесс {subject.process.name} получил доступ к файлам хранилища паролей браузера "
+            "от имени учетной записи {subject.account.id} на узле {event_src.host}"
+        )
+    return (
+        "Обнаружен подозрительный доступ к файлам хранилища паролей браузера на узле {event_src.host}"
+    )
+
+
+def _fallback_description(language: str, rule_name: str) -> str:
+    if language == "en":
+        return "The rule detects suspicious access to browser password store files."
+    return "Правило обнаруживает подозрительный доступ к файлам хранилища паролей браузера."
+
+
+def _validate_i18n_yaml(data: dict[str, Any], rule_name: str, language: str) -> dict[str, Any]:
     description = data.get("Description")
     if not isinstance(description, str) or not description.strip():
-        description = f"Correlation rule {rule_name} detects suspicious activity."
+        description = _fallback_description(language, rule_name)
 
-    event_descriptions = data.get("EventDescriptions")
-    if not isinstance(event_descriptions, list) or not event_descriptions:
-        event_descriptions = [
-            {
-                "LocalizationId": f"corrname_{rule_name}",
-                "EventDescription": f"Correlation rule {rule_name} detected suspicious activity on host {{event_src.host}}",
-            }
-        ]
+    raw_items = data.get("EventDescriptions")
+    if not isinstance(raw_items, list):
+        raw_items = []
 
     cleaned_items = []
-    for idx, item in enumerate(event_descriptions[:2], start=1):
+    for idx, item in enumerate(raw_items[:2], start=1):
         if not isinstance(item, dict):
             continue
 
-        localization_id = item.get("LocalizationId")
+        localization_id = f"corrname_{rule_name}" if idx == 1 else f"corrname_{rule_name}_{idx}"
         event_description = item.get("EventDescription")
 
-        if not isinstance(localization_id, str) or not localization_id.strip():
-            localization_id = f"corrname_{rule_name}" if idx == 1 else f"corrname_{rule_name}_{idx}"
-
         if not isinstance(event_description, str) or not event_description.strip():
-            event_description = f"Correlation rule {rule_name} detected suspicious activity on host {{event_src.host}}"
+            event_description = _fallback_event_description(language, rule_name, idx)
 
         cleaned_items.append(
             {
@@ -48,17 +67,19 @@ def _validate_i18n_yaml(data: dict[str, Any], rule_name: str) -> dict[str, Any]:
             }
         )
 
-    if not cleaned_items:
-        cleaned_items = [
+    while len(cleaned_items) < 2:
+        idx = len(cleaned_items) + 1
+        localization_id = f"corrname_{rule_name}" if idx == 1 else f"corrname_{rule_name}_{idx}"
+        cleaned_items.append(
             {
-                "LocalizationId": f"corrname_{rule_name}",
-                "EventDescription": f"Correlation rule {rule_name} detected suspicious activity on host {{event_src.host}}",
+                "LocalizationId": localization_id,
+                "EventDescription": _fallback_event_description(language, rule_name, idx),
             }
-        ]
+        )
 
     return {
         "Description": description,
-        "EventDescriptions": cleaned_items,
+        "EventDescriptions": cleaned_items[:2],
     }
 
 
@@ -90,8 +111,8 @@ def generate_localizations(
     yaml_en = llm.generate_yaml(prompt_en)
     yaml_ru = llm.generate_yaml(prompt_ru)
 
-    yaml_en = _validate_i18n_yaml(yaml_en, rule_name)
-    yaml_ru = _validate_i18n_yaml(yaml_ru, rule_name)
+    yaml_en = _validate_i18n_yaml(yaml_en, rule_name, "en")
+    yaml_ru = _validate_i18n_yaml(yaml_ru, rule_name, "ru")
 
     en_path = i18n_dir / "i18n_en.yaml"
     ru_path = i18n_dir / "i18n_ru.yaml"
