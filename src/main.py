@@ -3,6 +3,8 @@ from pathlib import Path
 from data_utils import unpack_zip
 from llm_utils import LLMClient
 from normalize import run_normalization_for_correlation
+from classify import classify_correlation
+from localize import generate_localizations
 from training_data import (
     get_classification_examples,
     get_localization_examples,
@@ -44,6 +46,7 @@ def main() -> None:
     print(f"\nRunning normalization for: {target_corr}")
 
     llm = LLMClient()
+
     created_files = run_normalization_for_correlation(
         correlation_dir=target_corr,
         taxonomy=taxonomy,
@@ -51,9 +54,24 @@ def main() -> None:
         llm=llm,
     )
 
-    print("\nCreated files:")
+    print("\nCreated norm files:")
     for p in created_files:
         print(" -", p.name)
+
+    answers_path = classify_correlation(
+        correlation_dir=target_corr,
+        classification_examples=classification_examples,
+        llm=llm,
+    )
+    print(f"\nSaved answers.json to: {answers_path}")
+
+    en_path, ru_path = generate_localizations(
+        correlation_dir=target_corr,
+        localization_examples=localization_examples,
+        llm=llm,
+    )
+    print(f"Saved i18n_en.yaml to: {en_path}")
+    print(f"Saved i18n_ru.yaml to: {ru_path}")
 
 
 if __name__ == "__main__":

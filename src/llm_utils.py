@@ -7,6 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
+import yaml
 
 
 load_dotenv()
@@ -41,3 +42,11 @@ class LLMClient:
         text = self.generate_text(prompt)
         text = strip_code_fences(text)
         return json.loads(text)
+
+    def generate_yaml(self, prompt: str) -> dict[str, Any]:
+        text = self.generate_text(prompt)
+        text = strip_code_fences(text)
+        data = yaml.safe_load(text)
+        if not isinstance(data, dict):
+            raise ValueError("YAML response is not a dictionary")
+        return data
