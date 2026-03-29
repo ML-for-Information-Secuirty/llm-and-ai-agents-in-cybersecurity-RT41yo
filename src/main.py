@@ -5,6 +5,7 @@ from llm_utils import LLMClient
 from normalize import run_normalization_for_correlation
 from classify import classify_correlation
 from localize import generate_localizations
+from pack import build_zip_from_dir
 from training_data import (
     get_classification_examples,
     get_localization_examples,
@@ -14,6 +15,7 @@ from training_data import (
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK_DIR = ROOT / "work"
+OUTPUT_DIR = ROOT / "output"
 
 WINDOWS_ZIP = ROOT / "windows_correlation_rules.zip"
 MACOS_ZIP = ROOT / "macos_correlation_rules.zip"
@@ -22,6 +24,13 @@ TAXONOMY_ZIP = ROOT / "taxonomy_fields.zip"
 WINDOWS_DIR = WORK_DIR / "windows_correlation_rules"
 MACOS_DIR = WORK_DIR / "macos_correlation_rules"
 TAXONOMY_DIR = WORK_DIR / "taxonomy_fields"
+
+
+def list_correlation_dirs(windows_root: Path) -> list[Path]:
+    return sorted(
+        p for p in windows_root.glob("correlation_*")
+        if p.is_dir()
+    )
 
 
 def main() -> None:
@@ -42,36 +51,41 @@ def main() -> None:
     print(f"localization_examples: {len(localization_examples)}")
     print(f"taxonomy loaded: {taxonomy['en'] is not None and taxonomy['ru'] is not None}")
 
-    target_corr = windows_root / "correlation_10"
-    print(f"\nRunning normalization for: {target_corr}")
+    correlation_dirs = list_correlation_dirs(windows_root)
+    print(f"total correlations: {len(correlation_dirs)}")
 
     llm = LLMClient()
 
-    created_files = run_normalization_for_correlation(
-        correlation_dir=target_corr,
-        taxonomy=taxonomy,
-        normalization_examples=normalization_examples,
-        llm=llm,
-    )
+    for idx, correlation_dir in enumerate(correlation_dirs, start=1):
+        print(f"\n[{idx}/{len(correlation_dirs)}] Processing {correlation_dir.name}")
 
-    print("\nCreated norm files:")
-    for p in created_files:
-        print(" -", p.name)
+        created_files = run_normalization_for_correlation(
+            correlation_dir=correlation_dir,
+            taxonomy=taxonomy,
+            normalization_examples=normalization_examples,
+            llm=llm,
+        )
+        print(f"  norm files: {len(created_files)}")
 
-    answers_path = classify_correlation(
-        correlation_dir=target_corr,
-        classification_examples=classification_examples,
-        llm=llm,
-    )
-    print(f"\nSaved answers.json to: {answers_path}")
+        answers_path = classify_correlation(
+            correlation_dir=correlation_dir,
+            classification_examples=classification_examples,
+            llm=llm,
+        )
+        print(f"  answers: {answers_path.name}")
 
-    en_path, ru_path = generate_localizations(
-        correlation_dir=target_corr,
-        localization_examples=localization_examples,
-        llm=llm,
+        en_path, ru_path = generate_localizations(
+            correlation_dir=correlation_dir,
+            localization_examples=localization_examples,
+            llm=llm,
+        )
+        print(f"  i18n: {en_path.name}, {ru_path.name}")
+
+    out_zip = build_zip_from_dir(
+        src_dir=windows_root,
+        out_zip_without_suffix=OUTPUT_DIR / "windows_correlation_rules",
     )
-    print(f"Saved i18n_en.yaml to: {en_path}")
-    print(f"Saved i18n_ru.yaml to: {ru_path}")
+    print(f"\nBuilt archive: {out_zip}")
 
 
 if __name__ == "__main__":
