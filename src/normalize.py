@@ -43,3 +43,27 @@ def normalize_one_event(
     out_path = build_norm_path(event_path)
     write_json(out_path, norm_data)
     return out_path
+
+
+def run_normalization_for_correlation(
+    correlation_dir: Path,
+    taxonomy: dict[str, Any],
+    normalization_examples: list[dict[str, Any]],
+    llm: LLMClient,
+) -> list[Path]:
+    tests_dir = correlation_dir / "tests"
+    event_files = sorted(tests_dir.glob("events_*.json"))
+
+    created_files: list[Path] = []
+
+    for event_path in event_files:
+        print(f"  normalizing: {event_path.name}")
+        out_path = normalize_one_event(
+            event_path=event_path,
+            taxonomy=taxonomy,
+            normalization_examples=normalization_examples,
+            llm=llm,
+        )
+        created_files.append(out_path)
+
+    return created_files
