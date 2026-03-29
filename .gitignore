@@ -1,0 +1,25 @@
+# virtual environment
+.venv/
+
+# python cache
+__pycache__/
+*.py[cod]
+
+# env files
+.env
+
+# jupyter
+.ipynb_checkpoints/
+
+# local work dirs
+work/
+output/
+artifacts/
+
+# macOS / Linux / editors
+.DS_Store
+.vscode/
+.idea/
+
+# logs
+*.log
